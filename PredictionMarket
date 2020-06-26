@@ -1,0 +1,175 @@
+pragma solidity 0.6.0;    
+
+
+contract PredictionMarket{
+    
+     enum OrderType{buy, sell}
+     enum Result{open, yes, no}
+     
+     struct Order{
+         address user;
+         OrderType ordertype;
+         uint amount;
+         uint price;
+     }
+     
+     uint public constant Tx_fee_num =1;
+     uint public constant Tx_fee_den = 500;
+     uint public deadline;
+     uint public counter;
+     uint public collateral;
+     
+     address public owner;
+     Result public result;
+     
+     mapping(address => uint ) public share;
+     mapping(uint => Order) public orders;
+     mapping(address => uint ) public balance;
+     
+     event OrderPlaced(uint orderId, address user, OrderType ordertype, uint amount, uint price);
+     event TradeMatched(uint orderId, address user, uint amount);
+     event OrderCancelled(uint orderId);
+     event Payout(address user, uint amount);
+     
+     constructor(uint duration) public payable{
+         require(msg.value > 0);
+         owner = msg.sender;
+         deadline = now + duration;
+         share[msg.sender] = msg.value / 100;
+         collateral = msg.value;
+        
+     }
+     
+     function orderBuy(uint price) public payable{
+         require(now < deadline);
+         require(msg.value > 0);
+         require(price > 0);
+         require(price <= 100);
+         uint amount = msg.value / price;
+         counter++;
+         orders[counter] = Order(msg.sender, OrderType.buy, amount, price);
+         emit OrderPlaced(counter, msg.sender, OrderType.buy, amount, price);
+     }
+     
+     function orderSell(uint price, uint amount)public {
+         require(now < deadline);
+         require(share[msg.sender] >= amount);
+         require(price >= 0);
+         require(price <= 100);
+         
+         share[msg.sender] -= amount;
+         counter++;
+         orders[counter] = Order(msg.sender, OrderType.sell, amount, price);
+         emit OrderPlaced(counter, msg.sender, OrderType.sell, amount, price);
+         
+         
+         
+     }
+     
+     function tradeBuy(uint orderId) public payable{
+         Order storage order = orders[orderId];
+         
+         require(now < deadline);
+         require(order.user != msg.sender);
+         require(order.ordertype == OrderType.sell);
+         require(order.amount > 0);
+         require(msg.value > 0);
+         require(msg.value <= order.amount*order.price);
+         
+         uint amount = msg.value / order.price;
+         uint ratio = Tx_fee_num / Tx_fee_den;
+         
+         uint fee = (amount*order.price) * ratio;
+         uint feeShare = amount * ratio;
+         
+         share[msg.sender] += (amount - feeShare);
+         share[owner] += feeShare;
+         
+         balance[order.user] += (amount * order.price) - fee;
+         balance[owner] += fee;
+         
+         order.amount -= amount;
+         if(order.amount == 0){
+             delete orders[orderId];
+         }
+         
+          emit TradeMatched(orderId, msg.sender, amount);
+         
+         
+         
+     }
+     
+      function tradeSell(uint orderId) public payable {
+         Order storage order = orders[orderId];
+         
+         require(now < deadline);
+         require(order.user != msg.sender);
+         require(order.ordertype == OrderType.buy);
+         require(order.amount > 0);
+         require(msg.value > 0);
+         require(msg.value <= order.amount*order.price);
+         
+         uint amount = msg.value / order.price;
+         uint ratio = Tx_fee_num / Tx_fee_den;
+         
+         uint fee = (amount*order.price) * ratio;
+         uint feeShare = amount * ratio;
+         
+         share[msg.sender] += (amount - feeShare);
+         share[owner] += feeShare;
+         
+         balance[order.user] += (amount * order.price) - fee;
+         balance[owner] += fee;
+         
+         order.amount -= amount;
+         if(order.amount == 0){
+             delete orders[orderId];
+         }
+         
+          emit TradeMatched(orderId, msg.sender, amount);
+         
+         
+         
+     }
+     
+     
+     function cancelOrder(uint orderId) public{
+         Order storage order = orders[orderId];
+         
+         require(order.user == msg.sender);
+         
+         if(order.ordertype == OrderType.buy){
+             balance[msg.sender] += order.amount + order.price;
+         }
+         else{
+             share[msg.sender] += order.amount;
+             delete orders[orderId];
+             emit OrderCancelled(orderId);
+     }
+     }
+
+    function resolve(bool  _result) public {
+        require(now > deadline);
+        require(msg.sender == owner);
+        require(result == Result.open);
+        
+        result = _result ?Result.yes :Result.no;
+        if(result == Result.no){
+            balance[owner] += collateral;
+        }
+        
+    }
+    
+    function withdraw() public{
+        uint payout = balance[msg.sender];
+        balance[msg.sender]  = 0;
+        
+        if(result == Result.yes){
+            payout += share[msg.sender]*100;
+            share[msg.sender] = 0;
+        }
+        msg.sender.transfer(payout);
+        emit Payout(msg.sender, payout);
+    }
+     
+}
