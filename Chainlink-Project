@@ -39,7 +39,7 @@ contract PredictionMarket{
          deadline = now + duration;
          share[msg.sender] = msg.value / 100;
          collateral = msg.value;
-         ref = AggregatorInterface(_aggre);
+         ref = AggregatorInterface(_aggre);  //  Address: 0x8468b2bDCE073A157E560AA4D9CcF6dB1DB98507
         
      }
      
@@ -49,6 +49,7 @@ contract PredictionMarket{
          require(price > 0);
          require(price <= 100);
          uint amount = msg.value / price;
+         share[msg.sender] += amount;
          counter++;
          orders[counter] = Order(msg.sender, OrderType.buy, amount, price);
          emit OrderPlaced(counter, msg.sender, OrderType.buy, amount, price);
@@ -102,36 +103,33 @@ contract PredictionMarket{
          
      }
      
-      function tradeSell(uint orderId) public payable {
+     function tradeSell(uint orderId, uint _amount) public payable {
          Order storage order = orders[orderId];
          
          require(now < deadline);
          require(order.user != msg.sender);
          require(order.ordertype == OrderType.buy);
          require(order.amount > 0);
-         require(msg.value > 0);
-         require(msg.value <= order.amount*order.price);
-         
-         uint amount = msg.value / order.price;
+         require(_amount <= order.amount);
+         require(share[msg.sender] >= _amount);
          uint ratio = Tx_fee_num / Tx_fee_den;
          
-         uint fee = (amount*order.price) * ratio;
-         uint feeShare = amount * ratio;
-         
-         share[msg.sender] += (amount - feeShare);
+         uint fee = (_amount * order.price)* ratio;
+         uint feeShare = _amount * ratio;
+         share[msg.sender] -= _amount;
+         share[order.user] += (_amount - feeShare);
          share[owner] += feeShare;
          
-         balance[order.user] += (amount * order.price) - fee;
+         balance[msg.sender] += (_amount * order.price) - fee;
          balance[owner] += fee;
-         
-         order.amount -= amount;
+         order.amount  -= _amount;
          if(order.amount == 0){
              delete orders[orderId];
          }
          
-          emit TradeMatched(orderId, msg.sender, amount);
+          emit TradeMatched(orderId, msg.sender, _amount);
          
-         
+          
          
      }
      
@@ -181,7 +179,7 @@ contract PredictionMarket{
             payout += share[msg.sender]*100;
             share[msg.sender] = 0;
         }
-        msg.sender.transfer(payout);
+          msg.sender.transfer(payout); 
         emit Payout(msg.sender, payout);
     }
      
