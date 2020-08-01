@@ -1,6 +1,6 @@
 # Chainlink Defi-Project
 
-As its name suggest decentralized finance, everything will be decentrilized from buying and selling shares to a individual payout. Here we will we predicting whether price of bitcoin will cross $200 mark  for some instance or not.
+As its name suggest decentralized finance, everything will be decentrilized from buying and selling shares to a individual payout. Here we will we predicting whether price of bitcoin will cross $200 mark  for some instance or not
 
 # Flow of the Project:
 
